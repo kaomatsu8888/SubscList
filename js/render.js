@@ -906,6 +906,17 @@ function renderSettings() {
         </div>
       </div>
 
+      <div class="settings-section">
+        <div class="settings-section-title">危険な操作</div>
+        <div class="settings-list">
+          <div class="settings-row clickable" id="btn-clear-data">
+            <span class="settings-row-icon">🗑️</span>
+            <span class="settings-row-label" style="color:var(--up)">すべてのデータを削除</span>
+            ${CHEVRON_SVG}
+          </div>
+        </div>
+      </div>
+
       <p class="text-sub text-xs text-center mt-16" style="padding-bottom:8px">SubscBox v1.0.0 — データは端末内に保存されます</p>
     </div>`;
 
@@ -966,6 +977,20 @@ function renderSettings() {
       document.getElementById('btn-export').addEventListener('click', () => {
         exportJSON();
         showToast('エクスポートしました');
+      });
+      // Clear all data
+      document.getElementById('btn-clear-data').addEventListener('click', () => {
+        showConfirm({
+          title: 'すべてのデータを削除',
+          body: 'サブスク・設定・履歴など、アプリのすべてのデータが完全に削除されます。この操作は取り消せません。本当によろしいですか？',
+          confirmLabel: '削除する',
+          danger: true,
+          onConfirm: () => {
+            localStorage.removeItem('subscbox:v1');
+            showToast('データを削除しました');
+            setTimeout(() => location.reload(), 800);
+          },
+        });
       });
     },
   };
