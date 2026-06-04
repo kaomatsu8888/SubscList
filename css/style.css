@@ -76,7 +76,9 @@ ul, ol { list-style: none; }
 ═══════════════════════════════════════════ */
 .app-wrapper {
   position: fixed;
-  inset: 0;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
   bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
@@ -88,7 +90,9 @@ ul, ol { list-style: none; }
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  scrollbar-width: none;
 }
+.app-content::-webkit-scrollbar { display: none; }
 
 /* ═══════════════════════════════════════════
    Notification Banner
@@ -932,3 +936,136 @@ ul, ol { list-style: none; }
   background: var(--card);
   color: var(--text-sub);
 }
+
+/* ═══════════════════════════════════════════
+   Detail View — updated card layouts
+═══════════════════════════════════════════ */
+.detail-inforow {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px;
+  align-items: center;
+}
+.detail-inforow > :last-child {
+  text-align: right;
+  justify-self: end;
+}
+.detail-cancel-btn {
+  background: rgba(229, 72, 77, 0.1);
+  color: var(--up);
+  width: 100%;
+}
+.detail-section-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-sub);
+  padding: 0 4px;
+  margin: 16px 0 8px;
+}
+
+/* ═══════════════════════════════════════════
+   Diagnosis Quiz
+═══════════════════════════════════════════ */
+.diag-quiz-outer {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+.diag-quiz-header {
+  padding: 16px 16px 0;
+}
+.diag-quiz-progress {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 12px 0 0;
+}
+.diag-quiz-progress-fill {
+  height: 100%;
+  background: var(--progress);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.quiz-card-area {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px 20px;
+  position: relative;
+  min-height: 300px;
+}
+.quiz-card-bg {
+  position: absolute;
+  inset: 28px 30px 16px;
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  transform: scale(0.93) translateY(8px);
+  transform-origin: center bottom;
+  border: 1px solid var(--border);
+}
+.quiz-card {
+  position: relative;
+  width: 100%;
+  background: var(--bg);
+  border-radius: var(--radius-lg);
+  padding: 32px 24px 28px;
+  box-shadow: 0 6px 32px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s;
+  border: 1px solid var(--border);
+}
+.quiz-card-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  margin: 0 auto 16px;
+  border: 1px solid var(--border);
+}
+.quiz-card-name {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.quiz-card-price {
+  display: inline-block;
+  background: var(--card);
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.quiz-card-question {
+  font-size: 14px;
+  color: var(--text-sub);
+}
+.quiz-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  padding: 0 16px 32px;
+}
+.quiz-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  transition: transform 0.1s, opacity 0.15s;
+  cursor: pointer;
+}
+.quiz-btn:active:not(:disabled) { transform: scale(0.94); }
+.quiz-btn:disabled { opacity: 0.4; pointer-events: none; }
+.quiz-btn-emoji { font-size: 24px; line-height: 1; }
+.quiz-btn-none      { background: rgba(229, 72, 77, 0.12);  color: #E5484D; }
+.quiz-btn-sometimes { background: rgba(245, 158, 11, 0.12); color: #D97706; }
+.quiz-btn-often     { background: rgba(22, 163, 74, 0.12);  color: #16A34A; }

@@ -21,6 +21,7 @@ import { runDiagnosis } from './diagnosis.js';
 let homeState = { segment: 'all', sort: 'billing' };
 let calState  = { year: new Date().getFullYear(), month: new Date().getMonth() + 1 };
 let analyticsState = { period: 6 };
+let diagState = { phase: 'start', index: 0, answers: [] };
 let _charts = {};
 
 // ── Helpers ──
@@ -530,13 +531,195 @@ function renderAnalytics() {
 // ═══════════════════════════════════════════════════════════
 function renderDiagnosis() {
   const state = getState();
-  const history = state.diagnosisHistory;
-  const hasSubs = state.subscriptions.some(s => s.status === 'active');
+  const diagHistory = state.diagnosisHistory;
+  const activeSubs = state.subscriptions.filter(s => s.status === 'active');
 
-  const histHtml = history.length === 0 ? '' : `
+  // ── Result phase ──
+  if (diagState.phase === 'result') {
+    const baseResult = runDiagnosis(state);
+    // Augment with quiz answers: flag subs user said they don't use
+    const extraIssues = diagState.answers
+      .filter(a => a.freq === 'none')
+      .filter(a => !baseResult.issues.some(i => i.type === 'unused' && i.sub?.id === a.subId))
+      .map(a => {
+        const sub = state.subscriptions.find(s => s.id === a.subId);
+        return sub ? {
+          type: 'unused', severity: 'danger',
+          title: `未使用: ${sub.name}`,
+          desc: '先月ほとんど使っていないと回答しました',
+          suggest: '利用していない場合は解約を検討しましょう',
+          sub,
+        } : null;
+      }).filter(Boolean);
+
+    const finalResult = {
+      ...baseResult,
+      score: Math.max(0, baseResult.score - extraIssues.length * 8),
+      issues: [...baseResult.issues, ...extraIssues],
+    };
+    saveDiagnosis(finalResult);
+
+    const { score, issues } = finalResult;
+    const rr = 54, circ = 2 * Math.PI * rr;
+    const filled = (score / 100) * circ;
+    const scoreColor = score >= 80 ? '#16A34A' : score >= 60 ? '#F59E0B' : '#E5484D';
+    const scoreLabel = score >= 80 ? '優秀' : score >= 60 ? '普通' : '要改善';
+
+    const issueHtml = issues.length === 0
+      ? '<p class="text-sub text-sm text-center mt-16">問題は見つかりませんでした 🎉</p>'
+      : issues.map(i => `
+          <div class="diag-item">
+            <div class="diag-item-title">${escHtml(i.title)}</div>
+            <div class="diag-item-desc">${escHtml(i.desc)}</div>
+            <div class="diag-item-suggest">💡 ${escHtml(i.suggest)}</div>
+          </div>`).join('');
+
+    const html = `
+      <div class="page">
+        <div class="page-header">
+          <h1 class="page-title">診断結果</h1>
+          <button class="btn-ghost text-sub" id="restart-diag" style="font-size:13px">再診断</button>
+        </div>
+        <div class="card">
+          <div class="score-ring-wrap">
+            <div class="score-ring">
+              <svg width="120" height="120" viewBox="0 0 120 120">
+                <circle class="score-ring-bg" cx="60" cy="60" r="${rr}"/>
+                <circle class="score-ring-fill" cx="60" cy="60" r="${rr}"
+                  stroke="${scoreColor}"
+                  stroke-dasharray="${filled.toFixed(2)} ${circ.toFixed(2)}"
+                  stroke-dashoffset="0"/>
+              </svg>
+              <div class="score-text">
+                <span class="score-num" style="color:${scoreColor}">${score}</span>
+                <span class="score-label">${scoreLabel}</span>
+              </div>
+            </div>
+            <div class="text-sub text-sm">${issues.length}件の指摘</div>
+          </div>
+          ${issueHtml}
+        </div>
+      </div>`;
+
+    return {
+      html,
+      afterRender() {
+        document.getElementById('restart-diag').addEventListener('click', () => {
+          diagState = { phase: 'start', index: 0, answers: [] };
+          go('#/diagnosis');
+        });
+      },
+    };
+  }
+
+  // ── Quiz phase ──
+  if (diagState.phase === 'quiz' && activeSubs.length > 0) {
+    const idx = diagState.index;
+    const total = activeSubs.length;
+    const sub = activeSubs[idx];
+
+    const html = `
+      <div class="diag-quiz-outer">
+        <div class="diag-quiz-header">
+          <div class="row-between">
+            <span class="font-semibold" style="font-size:17px">サブスク診断</span>
+            <span class="text-sub text-sm" id="quiz-counter">${idx + 1} / ${total}</span>
+          </div>
+          <div class="diag-quiz-progress">
+            <div class="diag-quiz-progress-fill" id="quiz-progress-fill" style="width:${Math.round(idx / total * 100)}%"></div>
+          </div>
+        </div>
+
+        <div class="quiz-card-area">
+          <div class="quiz-card-bg"></div>
+          <div class="quiz-card" id="quiz-card">
+            <div class="quiz-card-icon" style="background:${sub.color ? sub.color + '22' : 'var(--card)'}">${escHtml(sub.icon) || '📦'}</div>
+            <div class="quiz-card-name">${escHtml(sub.name)}</div>
+            <div class="quiz-card-price">${fmtAmount(sub.amount, sub.currency)}${fmtCycle(sub.billingCycle, sub.customIntervalDays)}</div>
+            <div class="quiz-card-question">先月どのくらい使った？</div>
+          </div>
+        </div>
+
+        <div class="quiz-btns">
+          <button class="quiz-btn quiz-btn-none" data-freq="none">
+            <span class="quiz-btn-emoji">👎</span>使ってない
+          </button>
+          <button class="quiz-btn quiz-btn-sometimes" data-freq="sometimes">
+            <span class="quiz-btn-emoji">🤔</span>まあまあ
+          </button>
+          <button class="quiz-btn quiz-btn-often" data-freq="often">
+            <span class="quiz-btn-emoji">👍</span>よく使った
+          </button>
+        </div>
+      </div>`;
+
+    return {
+      html,
+      afterRender() {
+        document.querySelectorAll('.quiz-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            if (btn.disabled) return;
+            document.querySelectorAll('.quiz-btn').forEach(b => { b.disabled = true; });
+
+            const freq = btn.dataset.freq;
+            diagState.answers.push({ subId: activeSubs[diagState.index].id, freq });
+
+            const card = document.getElementById('quiz-card');
+            if (!card) return;
+
+            // Slide current card out to left
+            card.style.transform = 'translateX(-120%)';
+            card.style.opacity = '0';
+
+            setTimeout(() => {
+              const nextIdx = diagState.index + 1;
+              if (nextIdx >= activeSubs.length) {
+                diagState.phase = 'result';
+                go('#/diagnosis');
+                return;
+              }
+
+              diagState.index = nextIdx;
+              const nextSub = activeSubs[nextIdx];
+
+              // Update card content
+              const iconEl = card.querySelector('.quiz-card-icon');
+              iconEl.style.background = nextSub.color ? nextSub.color + '22' : 'var(--card)';
+              iconEl.textContent = nextSub.icon || '📦';
+              card.querySelector('.quiz-card-name').textContent = nextSub.name;
+              card.querySelector('.quiz-card-price').textContent =
+                `${fmtAmount(nextSub.amount, nextSub.currency)}${fmtCycle(nextSub.billingCycle, nextSub.customIntervalDays)}`;
+
+              // Update counter and progress bar
+              const counter = document.getElementById('quiz-counter');
+              if (counter) counter.textContent = `${nextIdx + 1} / ${activeSubs.length}`;
+              const fill = document.getElementById('quiz-progress-fill');
+              if (fill) fill.style.width = `${Math.round(nextIdx / activeSubs.length * 100)}%`;
+
+              // Instantly position off-screen right (no transition), then slide in
+              card.style.transition = 'none';
+              card.style.transform = 'translateX(120%)';
+              card.style.opacity = '0';
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                  card.style.transition = '';
+                  card.style.transform = '';
+                  card.style.opacity = '';
+                  document.querySelectorAll('.quiz-btn').forEach(b => { b.disabled = false; });
+                });
+              });
+            }, 260);
+          });
+        });
+      },
+    };
+  }
+
+  // ── Start phase ──
+  const histHtml = diagHistory.length === 0 ? '' : `
     <div class="card mt-16">
       <div class="font-semibold mb-8">過去の診断履歴</div>
-      ${history.slice(0, 5).map(h => {
+      ${diagHistory.slice(0, 5).map(h => {
         const r = JSON.parse(h.resultJson ?? '{}');
         const d = new Date(h.runAt);
         return `
@@ -556,64 +739,25 @@ function renderDiagnosis() {
       <div class="card text-center" style="padding:24px 16px">
         <div style="font-size:52px;margin-bottom:12px">🛡️</div>
         <div class="font-semibold" style="font-size:17px">サブスク健康診断</div>
-        <p class="text-sub text-sm mt-8">登録中のサブスクをルールベースで評価し、<br>改善提案を提示します。回数制限なし。</p>
-        <button class="btn btn-primary mt-16" id="run-diag" ${hasSubs ? '' : 'disabled'} style="${hasSubs ? '' : 'opacity:.4'}">診断を実行する</button>
+        <p class="text-sub text-sm mt-8">登録中のサブスク${activeSubs.length}件を1件ずつ確認して<br>スコアを算出します。</p>
+        <button class="btn btn-primary mt-16" id="start-diag"
+          ${activeSubs.length > 0 ? '' : 'disabled'}
+          style="${activeSubs.length > 0 ? '' : 'opacity:.4'}">
+          診断を開始する（${activeSubs.length}件）
+        </button>
       </div>
-      <div id="diag-result"></div>
       ${histHtml}
     </div>`;
 
   return {
     html,
     afterRender() {
-      document.getElementById('run-diag')?.addEventListener('click', () => {
-        const result = runDiagnosis(getState());
-        saveDiagnosis(result);
-        renderDiagResult(result);
+      document.getElementById('start-diag')?.addEventListener('click', () => {
+        diagState = { phase: 'quiz', index: 0, answers: [] };
+        go('#/diagnosis');
       });
     },
   };
-}
-
-function renderDiagResult(result) {
-  const el = document.getElementById('diag-result');
-  if (!el) return;
-
-  const { score, issues } = result;
-  const r = 54, circ = 2 * Math.PI * r;
-  const filled = (score / 100) * circ;
-  const scoreColor = score >= 80 ? '#16A34A' : score >= 60 ? '#F59E0B' : '#E5484D';
-  const scoreLabel = score >= 80 ? '優秀' : score >= 60 ? '普通' : '要改善';
-
-  const issueHtml = issues.length === 0
-    ? '<p class="text-sub text-sm text-center mt-16">問題は見つかりませんでした 🎉</p>'
-    : issues.map(i => `
-        <div class="diag-item">
-          <div class="diag-item-title">${escHtml(i.title)}</div>
-          <div class="diag-item-desc">${escHtml(i.desc)}</div>
-          <div class="diag-item-suggest">💡 ${escHtml(i.suggest)}</div>
-        </div>`).join('');
-
-  el.innerHTML = `
-    <div class="card mt-16">
-      <div class="score-ring-wrap">
-        <div class="score-ring">
-          <svg width="120" height="120" viewBox="0 0 120 120">
-            <circle class="score-ring-bg" cx="60" cy="60" r="${r}"/>
-            <circle class="score-ring-fill" cx="60" cy="60" r="${r}"
-              stroke="${scoreColor}"
-              stroke-dasharray="${filled.toFixed(2)} ${circ.toFixed(2)}"
-              stroke-dashoffset="0"/>
-          </svg>
-          <div class="score-text">
-            <span class="score-num" style="color:${scoreColor}">${score}</span>
-            <span class="score-label">${scoreLabel}</span>
-          </div>
-        </div>
-        <div class="text-sub text-sm">${issues.length}件の指摘</div>
-      </div>
-      ${issueHtml}
-    </div>`;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1102,7 +1246,7 @@ function renderSubDetail(id) {
   }
 
   const { exchangeRates: rates, settings, categories } = state;
-  const { defaultCurrency, showBillingProgress } = settings;
+  const { defaultCurrency } = settings;
   const monthly = monthlyEquiv(sub, rates, defaultCurrency);
   const yearly  = monthly * 12;
   const days    = daysUntilNext(sub);
@@ -1111,71 +1255,99 @@ function renderSubDetail(id) {
   const cat     = categories.find(c => c.id === sub.categoryId);
   const pm      = state.paymentMethods.find(p => p.id === sub.paymentMethodId);
 
-  const progressHtml = showBillingProgress ? `
-    <div class="progress-bar mt-8">
-      <div class="progress-fill" style="width:${Math.round(prog * 100)}%"></div>
-    </div>
-    <div class="text-sub text-xs text-center mt-4">${fmtDaysLeft(days)}</div>` : '';
+  const cycleLabel = sub.billingCycle === 'monthly' ? '月次'
+    : sub.billingCycle === 'yearly' ? '年次'
+    : `${sub.customIntervalDays ?? '?'}日ごと`;
+
+  const hasCancelInfo = sub.url || sub.memo;
 
   const html = `
     <div>
       <div class="subpage-header">
         <button class="back-btn" id="back-btn">${BACK_SVG}戻る</button>
-        <span class="subpage-title">詳細</span>
+        <span class="subpage-title">${escHtml(sub.name)}</span>
         <a href="#/sub/${id}/edit" class="subpage-action">編集</a>
       </div>
       <div class="p-16">
-        <div class="text-center mt-8">
+
+        <!-- Icon + category -->
+        <div class="text-center mt-8 mb-4">
           <div class="detail-icon" style="background:${sub.color ? sub.color + '22' : 'var(--card)'}">${escHtml(sub.icon) || '📦'}</div>
-          <div class="detail-name">${escHtml(sub.name)}</div>
-          <div class="detail-amount font-num">${fmtAmount(sub.amount, sub.currency)}</div>
-          <div class="detail-cycle text-sub">${fmtCycle(sub.billingCycle, sub.customIntervalDays)}</div>
+          <div class="text-sub text-sm mt-4">${cat ? escHtml(cat.name) : '—'}</div>
         </div>
 
-        <div class="card mt-16">
-          <div class="row-between">
+        <!-- Billing amount card -->
+        <div class="card mt-12">
+          <div class="detail-inforow" style="margin-bottom:4px">
+            <span class="text-sub text-sm">請求額</span>
+            <span class="text-sub text-sm" style="white-space:nowrap">${fmtDaysLeft(days)}</span>
+          </div>
+          <div class="detail-amount" style="text-align:left">${fmtAmount(sub.amount, sub.currency)}</div>
+          <div class="detail-cycle" style="text-align:left;margin-top:2px">${cycleLabel}</div>
+          <div style="border-top:1px solid var(--border);margin:12px 0"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr">
+            <div>
+              <div class="text-sub text-xs">月額換算</div>
+              <div class="font-semibold font-num" style="font-size:16px;margin-top:3px">${fmtMonthly(monthly, defaultCurrency)}</div>
+            </div>
+            <div>
+              <div class="text-sub text-xs">年額換算</div>
+              <div class="font-semibold font-num" style="font-size:16px;margin-top:3px">${fmtMonthly(yearly, defaultCurrency)}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Info card: billing dates + URL + memo + payment -->
+        <div class="card mt-12">
+          <div class="detail-inforow">
             <span class="text-sub text-sm">次回請求日</span>
-            <span class="font-semibold">${fmtDate(nextD)}</span>
+            <span class="font-semibold" style="white-space:nowrap">${fmtDate(nextD)}</span>
           </div>
-          ${progressHtml}
-        </div>
+          <div class="progress-bar mt-8">
+            <div class="progress-fill" style="width:${Math.round(prog * 100)}%"></div>
+          </div>
+          <div class="text-sub text-xs mt-4">${fmtDaysLeft(days)}</div>
 
-        <div class="detail-meta-grid">
-          <div class="detail-meta-item">
-            <div class="detail-meta-label">月額換算</div>
-            <div class="detail-meta-value font-num">${fmtMonthly(monthly, defaultCurrency)}</div>
+          <div style="border-top:1px solid var(--border);margin:12px 0"></div>
+          <div class="detail-inforow">
+            <span class="text-sub text-sm">契約開始日</span>
+            <span class="font-semibold" style="white-space:nowrap">${fmtDate(sub.firstBillingDate)}</span>
           </div>
-          <div class="detail-meta-item">
-            <div class="detail-meta-label">年額換算</div>
-            <div class="detail-meta-value font-num">${fmtMonthly(yearly, defaultCurrency)}</div>
-          </div>
-          <div class="detail-meta-item">
-            <div class="detail-meta-label">カテゴリ</div>
-            <div class="detail-meta-value">${cat ? `${cat.icon} ${escHtml(cat.name)}` : '—'}</div>
-          </div>
-          <div class="detail-meta-item">
-            <div class="detail-meta-label">支払い方法</div>
-            <div class="detail-meta-value">${pm ? escHtml(pm.name) : '—'}</div>
-          </div>
-        </div>
 
-        ${sub.memo ? `
-          <div class="card mt-12">
-            <div class="text-sub text-sm mb-4">メモ</div>
-            <div>${escHtml(sub.memo)}</div>
+          ${sub.url ? `
+          <div style="border-top:1px solid var(--border);margin:12px 0"></div>
+          <div class="detail-inforow" style="align-items:flex-start">
+            <span class="text-sub text-sm" style="flex-shrink:0">サービスURL</span>
+            <a href="${escHtml(sub.url)}" target="_blank" rel="noopener noreferrer"
+               style="color:var(--progress);font-size:13px;word-break:break-all;text-align:right">${escHtml(sub.url)}</a>
           </div>` : ''}
 
-        ${sub.url ? `
-          <div class="card mt-12">
-            <div class="text-sub text-sm mb-4">URL</div>
-            <a href="${escHtml(sub.url)}" target="_blank" rel="noopener" style="color:var(--progress);word-break:break-all">${escHtml(sub.url)}</a>
+          ${sub.memo ? `
+          <div style="border-top:1px solid var(--border);margin:12px 0"></div>
+          <div class="detail-inforow" style="align-items:flex-start">
+            <span class="text-sub text-sm" style="flex-shrink:0">メモ</span>
+            <span style="font-size:13px;text-align:right;word-break:break-word;min-width:0;flex:1">${escHtml(sub.memo)}</span>
           </div>` : ''}
 
-        <div class="col mt-24">
-          <a href="#/sub/${id}/edit" class="btn btn-secondary">編集</a>
-          <button class="btn btn-secondary" id="detail-cancel">解約済みにする</button>
-          <button class="btn btn-danger" id="detail-delete">削除</button>
+          ${pm ? `
+          <div style="border-top:1px solid var(--border);margin:12px 0"></div>
+          <div class="detail-inforow">
+            <span class="text-sub text-sm">支払い方法</span>
+            <span class="font-semibold text-sm" style="white-space:nowrap">${escHtml(pm.name)}</span>
+          </div>` : ''}
         </div>
+
+        ${hasCancelInfo ? `
+        <div class="detail-section-label">解約について</div>
+        <div class="card">
+          ${sub.memo ? `<p class="text-sm" style="line-height:1.65;${sub.url ? 'margin-bottom:12px' : ''}">${escHtml(sub.memo)}</p>` : ''}
+          ${sub.url ? `<a href="${escHtml(sub.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="display:flex">解約ページを開く</a>` : ''}
+        </div>` : ''}
+
+        ${sub.status === 'active' ? `<button class="btn detail-cancel-btn mt-24" id="detail-cancel">このサブスクを解約</button>` : ''}
+        <button class="btn btn-danger mt-8" id="detail-delete">削除</button>
+        <div style="height:8px"></div>
+
       </div>
     </div>`;
 
@@ -1185,7 +1357,7 @@ function renderSubDetail(id) {
       document.getElementById('back-btn').addEventListener('click', () => {
         if (history.length > 1) history.back(); else location.hash = '#/';
       });
-      document.getElementById('detail-cancel').addEventListener('click', () => {
+      document.getElementById('detail-cancel')?.addEventListener('click', () => {
         showConfirm({
           title: '解約済みにする',
           body: `「${sub.name}」を解約済みにしますか？`,
