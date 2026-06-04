@@ -174,6 +174,12 @@ export function saveDiagnosis(result) {
   return entry;
 }
 
+// ── JSON Import ──
+export function importData(parsed) {
+  const newState = mergeWithDefaults(DEFAULTS, parsed);
+  localStorage.setItem(KEY, JSON.stringify(newState));
+}
+
 // ── JSON Export ──
 export function exportJSON() {
   const state = getState();

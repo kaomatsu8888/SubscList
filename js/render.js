@@ -3,7 +3,7 @@ import {
   getState, addSubscription, updateSubscription, deleteSubscription,
   cancelSubscription, restoreSubscription, addPaymentMethod,
   deletePaymentMethod, updateSettings, upsertSnapshot, saveDiagnosis,
-  exportJSON, saveRates,
+  exportJSON, importData, saveRates,
 } from './store.js';
 import {
   nextBillingDate, daysUntilNext, getBillingProgress, monthlyEquiv,
@@ -890,10 +890,10 @@ function renderSettings() {
             <span class="settings-row-label">JSONエクスポート</span>
             ${CHEVRON_SVG}
           </div>
-          <div class="settings-row" style="opacity:.4">
+          <div class="settings-row clickable" id="btn-import">
             <span class="settings-row-icon">📥</span>
             <span class="settings-row-label">JSONインポート</span>
-            <span class="settings-row-value text-xs">v1.1で対応予定</span>
+            ${CHEVRON_SVG}
           </div>
         </div>
       </div>
@@ -977,6 +977,41 @@ function renderSettings() {
       document.getElementById('btn-export').addEventListener('click', () => {
         exportJSON();
         showToast('エクスポートしました');
+      });
+      // Import
+      document.getElementById('btn-import').addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.addEventListener('change', async () => {
+          const file = input.files?.[0];
+          if (!file) return;
+          let parsed;
+          try {
+            parsed = JSON.parse(await file.text());
+          } catch {
+            showToast('JSONの読み込みに失敗しました');
+            return;
+          }
+          if (!Array.isArray(parsed?.subscriptions)) {
+            showToast('SubscBoxのデータファイルではありません');
+            return;
+          }
+          const subCount = parsed.subscriptions.length;
+          const activeCount = parsed.subscriptions.filter(s => s.status === 'active').length;
+          showConfirm({
+            title: 'データをインポート',
+            body: `サブスク${subCount}件（有効${activeCount}件）のデータが含まれています。現在のすべてのデータが上書きされます。続けますか？`,
+            confirmLabel: 'インポートする',
+            danger: false,
+            onConfirm: () => {
+              importData(parsed);
+              showToast('インポートしました');
+              setTimeout(() => location.reload(), 800);
+            },
+          });
+        });
+        input.click();
       });
       // Clear all data
       document.getElementById('btn-clear-data').addEventListener('click', () => {
