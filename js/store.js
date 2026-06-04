@@ -1,6 +1,6 @@
 // js/store.js — localStorage CRUD, JSON export
 
-const KEY = 'subscbox:v1';
+export const KEY = 'subscbox:v1';
 
 const DEFAULTS = {
   schemaVersion: 1,
@@ -175,9 +175,40 @@ export function saveDiagnosis(result) {
 }
 
 // ── JSON Import ──
+// Returns { ok: true } on success, or { ok: false, error } if the file
+// doesn't look like a valid SubscBox export.
+export function validateImport(parsed) {
+  if (!parsed || typeof parsed !== 'object') {
+    return { ok: false, error: 'ファイルの形式が正しくありません' };
+  }
+  if (!Array.isArray(parsed.subscriptions)) {
+    return { ok: false, error: 'SubscBoxのデータファイルではありません' };
+  }
+  // Each subscription must have the fields the UI relies on.
+  const bad = parsed.subscriptions.find(s =>
+    !s || typeof s !== 'object' ||
+    typeof s.name !== 'string' ||
+    typeof s.amount !== 'number' || isNaN(s.amount) ||
+    typeof s.billingCycle !== 'string' ||
+    typeof s.firstBillingDate !== 'string'
+  );
+  if (bad) {
+    return { ok: false, error: 'データが破損しているため読み込めません' };
+  }
+  return { ok: true };
+}
+
 export function importData(parsed) {
   const newState = mergeWithDefaults(DEFAULTS, parsed);
   localStorage.setItem(KEY, JSON.stringify(newState));
+  _state = newState;
+  return newState;
+}
+
+// ── Clear all data ──
+export function clearData() {
+  localStorage.removeItem(KEY);
+  _state = deepCopy(DEFAULTS);
 }
 
 // ── JSON Export ──

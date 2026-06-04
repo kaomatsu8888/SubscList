@@ -1,4 +1,4 @@
-# SubscBox — サブスク管理アプリ
+# SubscList — サブスク管理アプリ
 
 契約中のサブスク・定期支払いを一元管理する PWA です。  
 ブラウザの localStorage にデータを保存します（ログイン・サーバー不要）。
@@ -14,27 +14,28 @@
 - 起動時リマインドバナー通知
 - 外貨対応（JPY / USD / EUR / TRY / NGN / INR）
 - ライト / ダーク / 自動テーマ
-- JSON エクスポート
+- JSON エクスポート / インポート（バックアップ・端末間の引き継ぎ）
+- 全データの一括削除（確認ダイアログ付き）
 - PWA（ホーム画面追加・オフライン動作）
 
 ## GitHub Pages へのデプロイ
 
 ```bash
-# 1. GitHubで新規リポジトリを作成（例: subscbox、Public）
+# 1. GitHubで新規リポジトリを作成（例: subsclist、Public）
 
 # 2. ローカルで初期化してプッシュ
 git init
 git add .
-git commit -m "init: subscbox web app"
+git commit -m "init: sublist web app"
 git branch -M main
-git remote add origin https://github.com/<user>/subscbox.git
+git remote add origin https://github.com/<user>/subsclist.git
 git push -u origin main
 ```
 
 3. GitHub → リポジトリ → **Settings → Pages**
    - Source: **Deploy from a branch** → Branch: `main` / フォルダ: `/ (root)` → Save
 
-4. 数十秒後に `https://<user>.github.io/subscbox/` で公開
+4. 数十秒後に `https://<user>.github.io/subsclist/` で公開
 
 5. iPhone なら Safari で開いて「ホーム画面に追加」で PWA として利用可能
 
@@ -72,8 +73,8 @@ python -m http.server 8000
 
 - すべてのデータはブラウザの localStorage に保存されます
 - サーバーへの送信は一切ありません
-- 端末を変更するとデータは引き継がれません（設定 → JSONエクスポートでバックアップ可）
+- 端末を変更するとデータは引き継がれません（設定 → JSONエクスポートでバックアップし、新しい端末で JSONインポートすると復元できます）
 
 ---
 
-*SubscBox v1.0.0*
+*SubscList v1.0.0*

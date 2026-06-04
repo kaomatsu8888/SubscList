@@ -3,7 +3,7 @@ import {
   getState, addSubscription, updateSubscription, deleteSubscription,
   cancelSubscription, restoreSubscription, addPaymentMethod,
   deletePaymentMethod, updateSettings, upsertSnapshot, saveDiagnosis,
-  exportJSON, importData, saveRates,
+  exportJSON, importData, validateImport, clearData, saveRates,
 } from './store.js';
 import {
   nextBillingDate, daysUntilNext, getBillingProgress, monthlyEquiv,
@@ -21,7 +21,7 @@ import { runDiagnosis } from './diagnosis.js';
 let homeState = { segment: 'all', sort: 'billing' };
 let calState  = { year: new Date().getFullYear(), month: new Date().getMonth() + 1 };
 let analyticsState = { period: 6 };
-let diagState = { phase: 'start', index: 0, answers: [] };
+let diagState = { phase: 'start', index: 0, answers: [], saved: false };
 let _charts = {};
 
 // ── Helpers ──
@@ -557,7 +557,12 @@ function renderDiagnosis() {
       score: Math.max(0, baseResult.score - extraIssues.length * 8),
       issues: [...baseResult.issues, ...extraIssues],
     };
-    saveDiagnosis(finalResult);
+    // Save once per completed quiz run — re-rendering the result
+    // (back/forward, refresh) must not duplicate history entries.
+    if (!diagState.saved) {
+      saveDiagnosis(finalResult);
+      diagState.saved = true;
+    }
 
     const { score, issues } = finalResult;
     const rr = 54, circ = 2 * Math.PI * rr;
@@ -605,7 +610,7 @@ function renderDiagnosis() {
       html,
       afterRender() {
         document.getElementById('restart-diag').addEventListener('click', () => {
-          diagState = { phase: 'start', index: 0, answers: [] };
+          diagState = { phase: 'start', index: 0, answers: [], saved: false };
           go('#/diagnosis');
         });
       },
@@ -753,7 +758,7 @@ function renderDiagnosis() {
     html,
     afterRender() {
       document.getElementById('start-diag')?.addEventListener('click', () => {
-        diagState = { phase: 'quiz', index: 0, answers: [] };
+        diagState = { phase: 'quiz', index: 0, answers: [], saved: false };
         go('#/diagnosis');
       });
     },
@@ -993,8 +998,9 @@ function renderSettings() {
             showToast('JSONの読み込みに失敗しました');
             return;
           }
-          if (!Array.isArray(parsed?.subscriptions)) {
-            showToast('SubscBoxのデータファイルではありません');
+          const check = validateImport(parsed);
+          if (!check.ok) {
+            showToast(check.error);
             return;
           }
           const subCount = parsed.subscriptions.length;
@@ -1021,7 +1027,7 @@ function renderSettings() {
           confirmLabel: '削除する',
           danger: true,
           onConfirm: () => {
-            localStorage.removeItem('subscbox:v1');
+            clearData();
             showToast('データを削除しました');
             setTimeout(() => location.reload(), 800);
           },
