@@ -117,7 +117,6 @@ function renderHome() {
   const { defaultCurrency, showBillingProgress, showMonthlyConversion } = settings;
   const active = subscriptions.filter(s => s.status === 'active');
 
-  const monthly = totalMonthly(subscriptions, rates, defaultCurrency);
   const allCnt  = active.length;
   const moCnt   = active.filter(s => s.billingCycle === 'monthly').length;
   const yrCnt   = active.filter(s => s.billingCycle === 'yearly').length;
@@ -125,6 +124,13 @@ function renderHome() {
   let filtered = active;
   if (homeState.segment === 'monthly') filtered = active.filter(s => s.billingCycle === 'monthly');
   if (homeState.segment === 'yearly')  filtered = active.filter(s => s.billingCycle === 'yearly');
+
+  // Hero figures follow the active segment
+  const heroMonthly = totalMonthly(filtered, rates, defaultCurrency);
+  const heroCount   = filtered.length;
+  const heroLabel   = homeState.segment === 'monthly' ? '今月の月額サブスク支払い'
+    : homeState.segment === 'yearly' ? '年額サブスクの月額換算'
+    : '今月のサブスク合計支払い';
 
   const sorted = [...filtered].sort((a, b) => {
     if (homeState.sort === 'billing')   return daysUntilNext(a) - daysUntilNext(b);
@@ -157,11 +163,11 @@ function renderHome() {
       </div>
 
       <div class="hero-card">
-        <div class="hero-label">今月のサブスク合計支払い</div>
-        <div class="hero-amount font-num">${fmtMonthly(monthly, defaultCurrency)}</div>
+        <div class="hero-label">${heroLabel}</div>
+        <div class="hero-amount font-num">${fmtMonthly(heroMonthly, defaultCurrency)}</div>
         <div class="hero-sub">
-          <span>年間換算 ${fmtMonthly(monthly * 12, defaultCurrency)}</span>
-          <span>契約数 ${allCnt}件</span>
+          <span>年間換算 ${fmtMonthly(heroMonthly * 12, defaultCurrency)}</span>
+          <span>契約数 ${heroCount}件</span>
         </div>
       </div>
 
