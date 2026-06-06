@@ -1182,10 +1182,11 @@ function renderSubForm(id) {
           <select class="form-select" id="f-category">${catOpts}</select>
         </div>
 
+        ${paymentMethods.length > 0 ? `
         <div class="form-group">
           <label class="form-label">支払い方法</label>
           <select class="form-select" id="f-payment">${pmOpts}</select>
-        </div>
+        </div>` : ''}
 
         <div class="form-group">
           <label class="form-label">メモ</label>
@@ -1265,7 +1266,7 @@ function renderSubForm(id) {
           customIntervalDays: currentCycle === 'custom' ? Number(document.getElementById('f-custom-days').value) : null,
           firstBillingDate: document.getElementById('f-date').value || todayStr(),
           categoryId: document.getElementById('f-category').value,
-          paymentMethodId: document.getElementById('f-payment').value || null,
+          paymentMethodId: document.getElementById('f-payment')?.value || s.paymentMethodId || null,
           memo: document.getElementById('f-memo').value.trim(),
           url: document.getElementById('f-url').value.trim(),
         };
