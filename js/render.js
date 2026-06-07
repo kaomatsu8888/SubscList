@@ -1274,7 +1274,7 @@ function renderSubForm(id) {
         if (id) {
           updateSubscription(id, fields);
           showToast('保存しました');
-          location.hash = `#/sub/${id}`;
+          location.hash = '#/';
         } else {
           const newId = addSubscription(fields);
           showToast('追加しました');

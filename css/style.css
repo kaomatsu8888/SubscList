@@ -120,7 +120,7 @@ ul, ol { list-style: none; }
 ═══════════════════════════════════════════ */
 #toast-container {
   position: fixed;
-  top: 16px;
+  top: calc(env(safe-area-inset-top, 0px) + 16px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 300;
