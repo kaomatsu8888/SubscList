@@ -22,6 +22,8 @@ let homeState = { segment: 'all', sort: 'billing' };
 let calState  = { year: new Date().getFullYear(), month: new Date().getMonth() + 1 };
 let analyticsState = { period: 6 };
 let diagState = { phase: 'start', index: 0, answers: [], saved: false };
+// Holds prefilled values for a "duplicate" — consumed once by the next new-sub form
+let pendingDuplicate = null;
 let _charts = {};
 
 // ── Helpers ──
@@ -1096,7 +1098,10 @@ function renderSubForm(id) {
   const state = getState();
   const { categories, paymentMethods, settings } = state;
   const existing = id ? state.subscriptions.find(s => s.id === id) : null;
-  const s = existing ?? {
+  // A duplicate is a "new" form (no id) seeded with another sub's values
+  const dup = (!id && pendingDuplicate) ? pendingDuplicate : null;
+  pendingDuplicate = null;
+  const s = existing ?? dup ?? {
     name: '', icon: '📦', color: '#3B82F6',
     amount: '', currency: settings.defaultCurrency ?? 'JPY',
     billingCycle: 'monthly', customIntervalDays: 30,
@@ -1417,7 +1422,8 @@ function renderSubDetail(id) {
           ${sub.url ? `<a href="${escHtml(sub.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="display:flex">解約ページを開く</a>` : ''}
         </div>` : ''}
 
-        ${sub.status === 'active' ? `<button class="btn detail-cancel-btn mt-24" id="detail-cancel">このサブスクを解約</button>` : ''}
+        <button class="btn btn-secondary mt-24" id="detail-duplicate">このサブスクを複製</button>
+        ${sub.status === 'active' ? `<button class="btn detail-cancel-btn mt-8" id="detail-cancel">このサブスクを解約</button>` : ''}
         <button class="btn btn-danger mt-8" id="detail-delete">削除</button>
         <div style="height:8px"></div>
 
@@ -1429,6 +1435,19 @@ function renderSubDetail(id) {
     afterRender() {
       document.getElementById('back-btn').addEventListener('click', () => {
         location.hash = '#/';
+      });
+      document.getElementById('detail-duplicate').addEventListener('click', () => {
+        // Seed a new-sub form with this sub's values (excluding identity/status)
+        pendingDuplicate = {
+          name: `${sub.name} のコピー`,
+          icon: sub.icon, color: sub.color,
+          amount: sub.amount, currency: sub.currency,
+          billingCycle: sub.billingCycle, customIntervalDays: sub.customIntervalDays,
+          firstBillingDate: sub.firstBillingDate,
+          categoryId: sub.categoryId, paymentMethodId: sub.paymentMethodId,
+          memo: sub.memo ?? '', url: sub.url ?? '',
+        };
+        location.hash = '#/sub/new';
       });
       document.getElementById('detail-cancel')?.addEventListener('click', () => {
         showConfirm({
