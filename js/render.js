@@ -1276,9 +1276,9 @@ function renderSubForm(id) {
           showToast('保存しました');
           location.hash = '#/';
         } else {
-          const newId = addSubscription(fields);
+          addSubscription(fields);
           showToast('追加しました');
-          location.hash = `#/sub/${newId}`;
+          location.hash = '#/';
         }
       });
 
@@ -1428,7 +1428,7 @@ function renderSubDetail(id) {
     html,
     afterRender() {
       document.getElementById('back-btn').addEventListener('click', () => {
-        if (history.length > 1) history.back(); else location.hash = '#/';
+        location.hash = '#/';
       });
       document.getElementById('detail-cancel')?.addEventListener('click', () => {
         showConfirm({
