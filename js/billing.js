@@ -36,6 +36,28 @@ export function nextBillingDate(sub) {
   return d.format('YYYY-MM-DD');
 }
 
+// ── Number of billings that have occurred up to today (inclusive) ──
+// Counts firstBillingDate as the 1st billing. Returns 0 if the first
+// billing is still in the future.
+export function billingsSoFar(sub) {
+  const today = dayjs().startOf('day');
+  let d = dayjs(sub.firstBillingDate).startOf('day');
+  if (d.isAfter(today)) return 0;
+
+  let count = 0;
+  for (let i = 0; i < 100000; i++) {
+    if (d.isAfter(today)) break;
+    count++;
+    d = advance(d, sub);
+  }
+  return count;
+}
+
+// ── Total amount paid so far (in the sub's own currency) ──
+export function totalPaidSoFar(sub) {
+  return billingsSoFar(sub) * (Number(sub.amount) || 0);
+}
+
 // ── Days until next billing ──
 export function daysUntilNext(sub) {
   return dayjs(nextBillingDate(sub)).startOf('day').diff(dayjs().startOf('day'), 'day');

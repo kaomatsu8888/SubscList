@@ -8,13 +8,14 @@ import {
 import {
   nextBillingDate, daysUntilNext, getBillingProgress, monthlyEquiv,
   totalMonthly, getBillingOccurrences, calendarMonthTotal, topCosts,
+  billingsSoFar, totalPaidSoFar,
 } from './billing.js';
 import {
   fmtAmount, fmtMonthly, fmtMonthlyFull, fmtCycle, fmtDate, fmtDateShort,
   fmtDaysLeft, fmtYearMonth, fmtPct, fmtDiff, escHtml,
   currentYearMonth, prevYearMonth, CURRENCY_SYMBOLS, CYCLE_LABELS, todayStr,
 } from './format.js';
-import { CURRENCIES, fetchRates } from './currency.js';
+import { CURRENCIES, fetchRates, ratesAreStale } from './currency.js';
 import { runDiagnosis } from './diagnosis.js';
 
 // ── Module-level view state ──
@@ -32,6 +33,17 @@ function go(hash) {
 }
 
 function showToast(msg) { window.showToast?.(msg); }
+
+// Compact "time ago" for FX freshness (e.g. "3時間前", "2日前")
+function timeAgo(iso) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'たった今';
+  if (mins < 60) return `${mins}分前`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}時間前`;
+  return `${Math.floor(hrs / 24)}日前`;
+}
 
 function destroyChart(id) {
   if (_charts[id]) { _charts[id].destroy(); delete _charts[id]; }
@@ -120,6 +132,18 @@ function renderHome() {
   const moCnt   = active.filter(s => s.billingCycle === 'monthly').length;
   const yrCnt   = active.filter(s => s.billingCycle === 'yearly').length;
 
+  // Only surface the FX refresh control when at least one sub is in a
+  // currency other than the default (otherwise rates are irrelevant).
+  const hasForeign = active.some(s => s.currency !== defaultCurrency);
+  const fxStale = ratesAreStale(rates);
+  const lastFetched = rates.reduce(
+    (latest, r) => (r.fetchedAt && (!latest || r.fetchedAt > latest) ? r.fetchedAt : latest),
+    null
+  );
+  const fxStatus = !lastFetched ? '為替レート未取得'
+    : fxStale ? `為替: ${timeAgo(lastFetched)}・更新を推奨`
+    : `為替: ${timeAgo(lastFetched)}`;
+
   let filtered = active;
   if (homeState.segment === 'monthly') filtered = active.filter(s => s.billingCycle === 'monthly');
   if (homeState.segment === 'yearly')  filtered = active.filter(s => s.billingCycle === 'yearly');
@@ -158,7 +182,11 @@ function renderHome() {
     <div class="page">
       <div class="page-header">
         <h1 class="page-title">メイン</h1>
-        <button id="refresh-rates" style="color:var(--text-sub);font-size:20px;padding:4px 8px;" aria-label="為替レート更新">↻</button>
+        ${hasForeign ? `
+        <button id="refresh-rates" class="fx-refresh ${fxStale ? 'is-stale' : ''}" aria-label="為替レートを更新">
+          <span class="fx-refresh-icon">↻</span>
+          <span class="fx-refresh-text">${escHtml(fxStatus)}</span>
+        </button>` : ''}
       </div>
 
       <div class="hero-card">
@@ -231,8 +259,8 @@ function renderHome() {
           go('#/');
         });
       });
-      // Refresh rates
-      document.getElementById('refresh-rates').addEventListener('click', async () => {
+      // Refresh rates (only present when there are foreign-currency subs)
+      document.getElementById('refresh-rates')?.addEventListener('click', async () => {
         showToast('為替レートを取得中…');
         try {
           const fresh = await fetchRates();
@@ -1327,6 +1355,18 @@ function renderSubDetail(id) {
     : sub.billingCycle === 'yearly' ? '年次'
     : `${sub.customIntervalDays ?? '?'}日ごと`;
 
+  // Elapsed time since contract start + cumulative spend
+  const startD     = dayjs(sub.firstBillingDate).startOf('day');
+  const elapsedDays = Math.max(0, dayjs().startOf('day').diff(startD, 'day'));
+  const elapsedMonths = Math.max(0, dayjs().startOf('day').diff(startD, 'month'));
+  const elapsedLabel = elapsedDays < 31
+    ? `${elapsedDays}日`
+    : elapsedMonths < 12
+      ? `${elapsedMonths}ヶ月`
+      : `${Math.floor(elapsedMonths / 12)}年${elapsedMonths % 12 > 0 ? (elapsedMonths % 12) + 'ヶ月' : ''}`;
+  const billCount  = billingsSoFar(sub);
+  const paidTotal  = totalPaidSoFar(sub);
+
   const hasCancelInfo = sub.url || sub.memo;
 
   const html = `
@@ -1380,6 +1420,18 @@ function renderSubDetail(id) {
           <div class="detail-inforow">
             <span class="text-sub text-sm">契約開始日</span>
             <span class="font-semibold" style="white-space:nowrap">${fmtDate(sub.firstBillingDate)}</span>
+          </div>
+
+          <div style="border-top:1px solid var(--border);margin:12px 0"></div>
+          <div class="detail-inforow">
+            <span class="text-sub text-sm">利用期間</span>
+            <span class="font-semibold" style="white-space:nowrap">${billCount > 0 ? elapsedLabel : 'まだ請求なし'}</span>
+          </div>
+
+          <div style="border-top:1px solid var(--border);margin:12px 0"></div>
+          <div class="detail-inforow">
+            <span class="text-sub text-sm">これまでの支払額</span>
+            <span class="font-semibold font-num" style="white-space:nowrap">${fmtAmount(paidTotal, sub.currency)}<span class="text-sub" style="font-weight:400;font-size:11px"> ・${billCount}回</span></span>
           </div>
 
           ${sub.url ? `
