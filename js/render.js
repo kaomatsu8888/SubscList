@@ -510,7 +510,14 @@ function renderAnalytics() {
       if (catCtx && Object.keys(catData).length > 0) {
         const catLabels = Object.keys(catData);
         const catValues = catLabels.map(k => Math.round(catData[k]));
-        const catColors = ['#E5484D','#3B82F6','#8B5CF6','#16A34A','#F59E0B','#06B6D4','#9A9A9A'];
+        // Prefer each category's own color; fall back to a palette so the
+        // doughnut stays distinct even with many categories.
+        const palette = ['#E5484D','#3B82F6','#EC4899','#F97316','#10B981','#8B5CF6',
+          '#6366F1','#F59E0B','#16A34A','#D946EF','#FBBF24','#06B6D4','#9A9A9A'];
+        const catColors = catLabels.map((name, i) => {
+          const cat = categories.find(c => c.name === name);
+          return cat?.color ?? palette[i % palette.length];
+        });
         _charts['cat'] = new Chart(catCtx, {
           type: 'doughnut',
           data: {

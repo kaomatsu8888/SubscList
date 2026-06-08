@@ -7,13 +7,19 @@ const DEFAULTS = {
   subscriptions: [],
   paymentMethods: [],
   categories: [
-    { id: 'cat-video',     name: '動画',      color: '#E5484D', icon: '🎬' },
-    { id: 'cat-music',     name: '音楽',      color: '#3B82F6', icon: '🎵' },
-    { id: 'cat-ai',        name: 'AI・ツール', color: '#8B5CF6', icon: '🤖' },
-    { id: 'cat-fitness',   name: 'フィットネス', color: '#16A34A', icon: '💪' },
-    { id: 'cat-insurance', name: '保険',      color: '#F59E0B', icon: '🛡️' },
-    { id: 'cat-telecom',   name: '通信',      color: '#06B6D4', icon: '📡' },
-    { id: 'cat-other',     name: 'その他',    color: '#9A9A9A', icon: '📦' },
+    { id: 'cat-video',     name: '動画',        color: '#E5484D', icon: '🎬' },
+    { id: 'cat-music',     name: '音楽',        color: '#3B82F6', icon: '🎵' },
+    { id: 'cat-game',      name: 'ゲーム',      color: '#EC4899', icon: '🎮' },
+    { id: 'cat-reading',   name: '読書・雑誌',   color: '#F97316', icon: '📚' },
+    { id: 'cat-learning',  name: '学習・教育',   color: '#10B981', icon: '🎓' },
+    { id: 'cat-ai',        name: 'AI・ツール',  color: '#8B5CF6', icon: '🤖' },
+    { id: 'cat-cloud',     name: 'クラウド・保存', color: '#6366F1', icon: '☁️' },
+    { id: 'cat-shopping',  name: 'ショッピング',  color: '#F59E0B', icon: '🛒' },
+    { id: 'cat-fitness',   name: 'フィットネス',  color: '#16A34A', icon: '💪' },
+    { id: 'cat-beauty',    name: '美容・健康',   color: '#D946EF', icon: '💄' },
+    { id: 'cat-insurance', name: '保険',        color: '#FBBF24', icon: '🛡️' },
+    { id: 'cat-telecom',   name: '通信',        color: '#06B6D4', icon: '📡' },
+    { id: 'cat-other',     name: 'その他',      color: '#9A9A9A', icon: '📦' },
   ],
   groups: [{ id: 'grp-main', name: 'メイン' }],
   exchangeRates: [],
@@ -39,6 +45,11 @@ export function load() {
     if (raw) {
       const parsed = JSON.parse(raw);
       _state = mergeWithDefaults(DEFAULTS, parsed);
+      // Persist migrations (e.g. newly added default categories) so the
+      // saved data stays in sync without waiting for the next write.
+      if ((parsed.categories?.length ?? 0) !== _state.categories.length) {
+        save();
+      }
     } else {
       _state = deepCopy(DEFAULTS);
     }
@@ -240,9 +251,20 @@ function mergeWithDefaults(defaults, data) {
       'monthlySnapshots', 'diagnosisHistory']) {
     if (Array.isArray(data[key])) result[key] = data[key];
   }
-  // Categories: prefer data if non-empty (user might have customized)
+  // Categories: keep the user's list (they may have customized names/colors),
+  // but add any default categories the saved data is missing (migration for
+  // existing users when new defaults are introduced). "その他" stays last.
   if (Array.isArray(data.categories) && data.categories.length > 0) {
-    result.categories = data.categories;
+    const userCats = data.categories;
+    const userIds = new Set(userCats.map(c => c && c.id));
+    const missing = defaults.categories.filter(c => !userIds.has(c.id));
+    const merged = [...userCats, ...deepCopy(missing)];
+    const otherIdx = merged.findIndex(c => c && c.id === 'cat-other');
+    if (otherIdx >= 0) {
+      const [other] = merged.splice(otherIdx, 1);
+      merged.push(other);
+    }
+    result.categories = merged;
   }
   if (Array.isArray(data.groups) && data.groups.length > 0) {
     result.groups = data.groups;
