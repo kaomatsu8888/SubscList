@@ -58,9 +58,6 @@ function showConfirm({ title, body, confirmLabel, onConfirm, danger = true }) {
 const ICON_PRESETS = ['📦','🤖','💬','🎬','🎵','💪','🛡️','📡','🚗','🏍️','☁️',
   '💕','📱','🎮','📚','🛒','🏥','✈️','🏠','💼','🎓','🔑','🎭','🎯','🌐','💡'];
 
-const COLOR_PRESETS = ['#E5484D','#F59E0B','#16A34A','#3B82F6','#8B5CF6',
-  '#06B6D4','#EC4899','#F97316','#10B981','#6366F1','#84CC16','#9A9A9A'];
-
 const BACK_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>`;
 const CHEVRON_SVG = `<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`;
 
@@ -421,7 +418,9 @@ function renderAnalytics() {
       <div class="analytics-top-card">
         <div class="analytics-total-label">今月の支出合計（月額換算）</div>
         <div class="analytics-total font-num">${fmtMonthly(monthly, defaultCurrency)}</div>
-        ${prevMo > 0 ? `<div class="analytics-diff ${diffClass}">${diffSign} ${fmtDiff(diff, defaultCurrency)} (${fmtPct(diffPct)})</div>` : ''}
+        ${prevMo > 0
+          ? `<div class="analytics-diff ${diffClass}">${diffSign} ${fmtDiff(diff, defaultCurrency)} (${fmtPct(diffPct)}) <span class="text-sub" style="font-weight:400">前月比</span></div>`
+          : `<div class="analytics-diff text-sub" style="font-size:12px">前月の比較データがまだありません</div>`}
         <div class="analytics-meta">
           <span>年間換算 ${fmtMonthly(monthly * 12, defaultCurrency)}</span>
           <span>1日あたり ${fmtMonthly(monthly / daysInMo, defaultCurrency)}</span>
@@ -1120,11 +1119,6 @@ function renderSubForm(id) {
     `<button class="emoji-option ${s.icon === ic ? 'selected' : ''}" data-icon="${ic}">${ic}</button>`
   ).join('');
 
-  const colorHtml = COLOR_PRESETS.map(c =>
-    `<button class="color-option ${s.color === c ? 'selected' : ''}" data-color="${c}"
-      style="background:${c}"></button>`
-  ).join('');
-
   const catOpts = categories.map(c =>
     `<option value="${c.id}" ${s.categoryId === c.id ? 'selected' : ''}>${c.icon} ${escHtml(c.name)}</option>`
   ).join('');
@@ -1154,11 +1148,6 @@ function renderSubForm(id) {
         <div class="form-group">
           <label class="form-label">アイコン</label>
           <div class="emoji-picker-row" id="icon-picker">${iconHtml}</div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">カラー</label>
-          <div class="color-picker-row" id="color-picker">${colorHtml}</div>
         </div>
 
         <div class="form-group">
@@ -1221,7 +1210,6 @@ function renderSubForm(id) {
     </div>`;
 
   let currentIcon  = s.icon;
-  let currentColor = s.color;
   let currentCycle = s.billingCycle;
 
   return {
@@ -1237,15 +1225,6 @@ function renderSubForm(id) {
         if (!btn) return;
         currentIcon = btn.dataset.icon;
         document.querySelectorAll('.emoji-option').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-      });
-
-      // Color picker
-      document.getElementById('color-picker').addEventListener('click', e => {
-        const btn = e.target.closest('[data-color]');
-        if (!btn) return;
-        currentColor = btn.dataset.color;
-        document.querySelectorAll('.color-option').forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
       });
 
@@ -1268,16 +1247,20 @@ function renderSubForm(id) {
         if (!name) { showToast('サービス名を入力してください'); return; }
         if (!amountRaw || isNaN(amount) || amount < 0) { showToast('金額を正しく入力してください'); return; }
 
+        const categoryId = document.getElementById('f-category').value;
+        // Icon background follows the chosen category's color
+        const cat = getState().categories.find(c => c.id === categoryId);
+
         const fields = {
           name,
           icon: currentIcon,
-          color: currentColor,
+          color: cat?.color ?? '#9A9A9A',
           amount,
           currency: document.getElementById('f-currency').value,
           billingCycle: currentCycle,
           customIntervalDays: currentCycle === 'custom' ? Number(document.getElementById('f-custom-days').value) : null,
           firstBillingDate: document.getElementById('f-date').value || todayStr(),
-          categoryId: document.getElementById('f-category').value,
+          categoryId,
           paymentMethodId: document.getElementById('f-payment')?.value || s.paymentMethodId || null,
           memo: document.getElementById('f-memo').value.trim(),
           url: document.getElementById('f-url').value.trim(),

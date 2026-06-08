@@ -610,23 +610,6 @@ ul, ol { list-style: none; }
 }
 .emoji-option.selected { border-color: var(--accent); }
 
-/* Color picker row */
-.color-picker-row {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 8px;
-}
-.color-option {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 3px solid transparent;
-  cursor: pointer;
-  transition: border-color 0.15s;
-}
-.color-option.selected { border-color: var(--text); }
-
 /* ═══════════════════════════════════════════
    Buttons
 ═══════════════════════════════════════════ */
