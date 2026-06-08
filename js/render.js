@@ -1203,7 +1203,10 @@ function renderSubForm(id) {
 
         <div class="form-group">
           <label class="form-label">初回請求日</label>
-          <input type="date" id="f-date" class="form-input" value="${s.firstBillingDate ?? todayStr()}">
+          <div class="row" style="gap:8px">
+            <input type="date" id="f-date" class="form-input" value="${s.firstBillingDate ?? todayStr()}" style="flex:1">
+            <button type="button" class="btn btn-secondary" id="f-date-today" style="width:auto;flex-shrink:0;padding:0 16px">今日</button>
+          </div>
         </div>
 
         <div class="form-group">
@@ -1254,6 +1257,11 @@ function renderSubForm(id) {
         currentIcon = btn.dataset.icon;
         document.querySelectorAll('.emoji-option').forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
+      });
+
+      // "Today" shortcut for the first-billing date
+      document.getElementById('f-date-today').addEventListener('click', () => {
+        document.getElementById('f-date').value = todayStr();
       });
 
       // Cycle segment
