@@ -1327,7 +1327,7 @@ function renderSubForm(id) {
       document.getElementById('f-delete')?.addEventListener('click', () => {
         showConfirm({
           title: '削除',
-          body: 'このサブスクを完全に削除しますか？この操作は取り消せません。',
+          body: '履歴ごと完全に削除され、復元できません。再開予定なら「解約済み」が便利です。',
           confirmLabel: '削除する',
           onConfirm: () => { deleteSubscription(id); showToast('削除しました'); location.hash = '#/'; },
         });
@@ -1389,7 +1389,10 @@ function renderSubDetail(id) {
         <!-- Icon + category -->
         <div class="text-center mt-8 mb-4">
           <div class="detail-icon" style="background:${sub.color ? sub.color + '22' : 'var(--card)'}">${escHtml(sub.icon) || '📦'}</div>
-          <div class="text-sub text-sm mt-4">${cat ? escHtml(cat.name) : '—'}</div>
+          <div class="text-sub text-sm mt-4">
+            ${cat ? escHtml(cat.name) : '—'}
+            ${sub.status === 'cancelled' ? '<span class="detail-status-badge">解約済み</span>' : ''}
+          </div>
         </div>
 
         <!-- Billing amount card -->
@@ -1472,7 +1475,10 @@ function renderSubDetail(id) {
           ${sub.url ? `<a href="${escHtml(sub.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="display:flex">解約ページを開く</a>` : ''}
         </div>` : ''}
 
-        <button class="btn btn-secondary mt-24" id="detail-duplicate">このサブスクを複製</button>
+        ${sub.status === 'cancelled'
+          ? `<button class="btn btn-primary mt-24" id="detail-restore">このサブスクを再開する</button>`
+          : ''}
+        <button class="btn btn-secondary ${sub.status === 'cancelled' ? 'mt-8' : 'mt-24'}" id="detail-duplicate">このサブスクを複製</button>
         ${sub.status === 'active' ? `<button class="btn detail-cancel-btn mt-8" id="detail-cancel">このサブスクを解約</button>` : ''}
         <button class="btn btn-danger mt-8" id="detail-delete">削除</button>
         <div style="height:8px"></div>
@@ -1484,6 +1490,11 @@ function renderSubDetail(id) {
     html,
     afterRender() {
       document.getElementById('back-btn').addEventListener('click', () => {
+        location.hash = '#/';
+      });
+      document.getElementById('detail-restore')?.addEventListener('click', () => {
+        restoreSubscription(id);
+        showToast('再開しました');
         location.hash = '#/';
       });
       document.getElementById('detail-duplicate').addEventListener('click', () => {
@@ -1510,7 +1521,7 @@ function renderSubDetail(id) {
       document.getElementById('detail-delete').addEventListener('click', () => {
         showConfirm({
           title: '削除',
-          body: 'このサブスクを完全に削除しますか？この操作は取り消せません。',
+          body: '履歴ごと完全に削除され、復元できません。再開予定なら「解約済み」が便利です。',
           confirmLabel: '削除する',
           onConfirm: () => { deleteSubscription(id); showToast('削除しました'); location.hash = '#/'; },
         });
