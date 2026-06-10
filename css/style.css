@@ -832,6 +832,34 @@ ul, ol { list-style: none; }
 .rank-cycle { font-size: 12px; color: var(--text-sub); }
 .rank-amount { font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
+/* Category breakdown legend (amount + percent per row) */
+.cat-legend { display: flex; flex-direction: column; }
+.cat-legend-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.cat-legend-row:last-child { border-bottom: none; }
+.cat-legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.cat-legend-name { font-size: 14px; font-weight: 500; }
+.cat-legend-pct { font-size: 12px; min-width: 36px; text-align: right; }
+.cat-legend-amount {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 64px;
+  text-align: right;
+}
+
 /* ═══════════════════════════════════════════
    Diagnosis
 ═══════════════════════════════════════════ */

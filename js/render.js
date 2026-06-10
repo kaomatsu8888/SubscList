@@ -431,13 +431,32 @@ function renderAnalytics() {
   const periodBtn = (n) =>
     `<button class="chip ${analyticsState.period === n ? 'active' : ''}" data-period="${n}">${n}ヶ月</button>`;
 
-  // Category data
-  const catData = {};
+  // Category data (name → monthly total), sorted descending by amount
+  const catMap = {};
   for (const sub of active) {
     const cat = categories.find(c => c.id === sub.categoryId);
     const key = cat?.name ?? 'その他';
-    catData[key] = (catData[key] ?? 0) + monthlyEquiv(sub, rates, defaultCurrency);
+    catMap[key] = (catMap[key] ?? 0) + monthlyEquiv(sub, rates, defaultCurrency);
   }
+  const palette = ['#E5484D','#3B82F6','#EC4899','#F97316','#10B981','#8B5CF6',
+    '#6366F1','#F59E0B','#16A34A','#D946EF','#FBBF24','#06B6D4','#9A9A9A'];
+  // Ordered list of { name, amount, color }, largest first
+  const catList = Object.entries(catMap)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, amount], i) => ({
+      name,
+      amount,
+      color: categories.find(c => c.name === name)?.color ?? palette[i % palette.length],
+    }));
+  const catTotal = catList.reduce((sum, c) => sum + c.amount, 0);
+
+  const catLegendHtml = catList.map(c => `
+    <div class="cat-legend-row">
+      <span class="cat-legend-dot" style="background:${c.color}"></span>
+      <span class="cat-legend-name">${escHtml(c.name)}</span>
+      <span class="cat-legend-pct text-sub">${catTotal > 0 ? Math.round(c.amount / catTotal * 100) : 0}%</span>
+      <span class="cat-legend-amount font-num">${fmtMonthly(c.amount, defaultCurrency)}</span>
+    </div>`).join('');
 
   const html = `
     <div class="page">
@@ -470,11 +489,13 @@ function renderAnalytics() {
           </div>
         </div>
         <div class="chart-container"><canvas id="trend-chart"></canvas></div>
+        ${catList.length > 0 ? '<div class="text-sub text-xs mt-8">カテゴリ色は下の内訳と共通。過去月は現在の比率で按分した目安です。</div>' : ''}
       </div>
 
       <div class="card mt-12">
         <div class="font-semibold mb-8">カテゴリ別内訳</div>
         <div class="chart-container" style="height:180px"><canvas id="cat-chart"></canvas></div>
+        ${catList.length > 0 ? `<div class="cat-legend mt-12">${catLegendHtml}</div>` : ''}
       </div>
     </div>`;
 
@@ -493,65 +514,67 @@ function renderAnalytics() {
         el.addEventListener('click', () => { location.hash = `#/sub/${el.dataset.subId}`; });
       });
 
-      // ── Trend Chart ──
+      // ── Trend Chart (category-stacked) ──
+      // Past months only store a total; approximate each month's category
+      // breakdown by applying the current category ratios to that total.
       destroyChart('trend');
       const trendCtx = document.getElementById('trend-chart')?.getContext('2d');
       if (trendCtx) {
         const n = analyticsState.period;
-        const labels = [], values = [];
+        const labels = [], totals = [];
         for (let i = n - 1; i >= 0; i--) {
           const d = dayjs().subtract(i, 'month');
           const ym2 = d.format('YYYY-MM');
           labels.push(`${d.month() + 1}月`);
           const snap = monthlySnapshots.find(s => s.yearMonth === ym2);
-          values.push(snap ? Math.round(snap.normalizedMonthlyTotal) : (i === 0 ? Math.round(monthly) : 0));
+          totals.push(snap ? snap.normalizedMonthlyTotal : (i === 0 ? monthly : 0));
         }
+        // One dataset per category; value = monthTotal * (category share)
+        const datasets = catList.length > 0
+          ? catList.map(c => ({
+              label: c.name,
+              data: totals.map(t => Math.round(t * (catTotal > 0 ? c.amount / catTotal : 0))),
+              backgroundColor: c.color,
+              borderRadius: 3,
+              stack: 'spend',
+            }))
+          : [{ label: '合計', data: totals.map(Math.round), backgroundColor: 'rgba(59,130,246,0.7)', borderRadius: 4 }];
+
         _charts['trend'] = new Chart(trendCtx, {
           type: 'bar',
-          data: {
-            labels,
-            datasets: [{
-              data: values,
-              backgroundColor: 'rgba(59,130,246,0.7)',
-              borderRadius: 4,
-            }],
-          },
+          data: { labels, datasets },
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: { label: ctx => `${ctx.dataset.label}: ¥${ctx.parsed.y.toLocaleString()}` },
+              },
+            },
             scales: {
+              x: { stacked: true, grid: { display: false } },
               y: {
+                stacked: true,
                 ticks: { callback: v => `¥${v.toLocaleString()}` },
                 grid: { color: 'rgba(128,128,128,0.1)' },
               },
-              x: { grid: { display: false } },
             },
           },
         });
       }
 
-      // ── Category Chart ──
+      // ── Category Chart (doughnut; legend rendered separately below) ──
       destroyChart('cat');
       const catCtx = document.getElementById('cat-chart')?.getContext('2d');
-      if (catCtx && Object.keys(catData).length > 0) {
-        const catLabels = Object.keys(catData);
-        const catValues = catLabels.map(k => Math.round(catData[k]));
-        // Prefer each category's own color; fall back to a palette so the
-        // doughnut stays distinct even with many categories.
-        const palette = ['#E5484D','#3B82F6','#EC4899','#F97316','#10B981','#8B5CF6',
-          '#6366F1','#F59E0B','#16A34A','#D946EF','#FBBF24','#06B6D4','#9A9A9A'];
-        const catColors = catLabels.map((name, i) => {
-          const cat = categories.find(c => c.name === name);
-          return cat?.color ?? palette[i % palette.length];
-        });
+      if (catCtx && catList.length > 0) {
         _charts['cat'] = new Chart(catCtx, {
           type: 'doughnut',
           data: {
-            labels: catLabels,
+            labels: catList.map(c => c.name),
             datasets: [{
-              data: catValues,
-              backgroundColor: catColors.slice(0, catLabels.length),
+              data: catList.map(c => Math.round(c.amount)),
+              backgroundColor: catList.map(c => c.color),
               borderWidth: 0,
             }],
           },
@@ -559,7 +582,10 @@ function renderAnalytics() {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-              legend: { position: 'right', labels: { boxWidth: 12, font: { size: 12 } } },
+              legend: { display: false },
+              tooltip: {
+                callbacks: { label: ctx => `${ctx.label}: ¥${ctx.parsed.toLocaleString()}` },
+              },
             },
           },
         });
