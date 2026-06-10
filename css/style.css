@@ -1008,6 +1008,34 @@ ul, ol { list-style: none; }
   font-weight: 600;
 }
 
+/* Built-in cancellation guide */
+.cancel-guide-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.cancel-guide-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--progress);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.cancel-guide-steps {
+  margin: 0;
+  padding-left: 1.3em;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cancel-guide-steps li {
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 /* ═══════════════════════════════════════════
    Diagnosis Quiz
 ═══════════════════════════════════════════ */

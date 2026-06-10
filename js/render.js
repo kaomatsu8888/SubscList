@@ -17,6 +17,7 @@ import {
 } from './format.js';
 import { CURRENCIES, fetchRates, ratesAreStale } from './currency.js';
 import { runDiagnosis } from './diagnosis.js';
+import { findCancelGuide } from './cancelGuides.js';
 
 // ── Module-level view state ──
 let homeState = { segment: 'all', sort: 'billing' };
@@ -1253,8 +1254,9 @@ function renderSubForm(id) {
         </div>
 
         <div class="form-group">
-          <label class="form-label">URL</label>
+          <label class="form-label">解約ページのURL</label>
           <input type="url" id="f-url" class="form-input" placeholder="https://..." value="${escHtml(s.url ?? '')}">
+          <div class="form-hint">主要サービスは解約手順が自動表示されます。それ以外で、解約ページを控えたい場合に（任意）。</div>
         </div>
 
         <button class="btn btn-primary mt-16" id="f-save">${id ? '保存' : 'サブスクを追加'}</button>
@@ -1401,7 +1403,9 @@ function renderSubDetail(id) {
   const billCount  = billingsSoFar(sub);
   const paidTotal  = totalPaidSoFar(sub);
 
-  const hasCancelInfo = sub.url || sub.memo;
+  // Built-in cancellation guide matched from the service name
+  const guide = findCancelGuide(sub.name);
+  const hasCancelInfo = guide || sub.url || sub.memo;
 
   const html = `
     <div>
@@ -1497,8 +1501,19 @@ function renderSubDetail(id) {
         ${hasCancelInfo ? `
         <div class="detail-section-label">解約について</div>
         <div class="card">
-          ${sub.memo ? `<p class="text-sm" style="line-height:1.65;${sub.url ? 'margin-bottom:12px' : ''}">${escHtml(sub.memo)}</p>` : ''}
-          ${sub.url ? `<a href="${escHtml(sub.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="display:flex">解約ページを開く</a>` : ''}
+          ${guide ? `
+            <div class="cancel-guide-head">
+              <span class="cancel-guide-badge">解約手順</span>
+              <span class="text-sub text-xs">${escHtml(guide.label)}</span>
+            </div>
+            <ol class="cancel-guide-steps">
+              ${guide.steps.map(st => `<li>${escHtml(st)}</li>`).join('')}
+            </ol>
+            ${guide.url ? `<a href="${escHtml(guide.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary mt-12" style="display:flex">解約ページを開く</a>` : ''}
+            <p class="text-sub text-xs mt-8">※ 手順は変更される場合があります。最新は公式ページをご確認ください。</p>
+          ` : ''}
+          ${sub.memo ? `<p class="text-sm" style="line-height:1.65;${guide ? 'margin-top:12px;border-top:1px solid var(--border);padding-top:12px;' : ''}${(sub.url && !guide) ? 'margin-bottom:12px' : ''}">${escHtml(sub.memo)}</p>` : ''}
+          ${(sub.url && !guide) ? `<a href="${escHtml(sub.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="display:flex">解約ページを開く</a>` : ''}
         </div>` : ''}
 
         ${sub.status === 'cancelled'

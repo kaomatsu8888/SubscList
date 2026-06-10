@@ -1,5 +1,5 @@
 // sw.js — Service Worker (app shell cache, offline-first)
-const CACHE = 'subscbox-v9';
+const CACHE = 'subscbox-v10';
 
 const SHELL = [
   './',
@@ -13,6 +13,7 @@ const SHELL = [
   './js/format.js',
   './js/notify.js',
   './js/diagnosis.js',
+  './js/cancelGuides.js',
   './js/render.js',
   './manifest.json',
   './assets/icon-192.png',
