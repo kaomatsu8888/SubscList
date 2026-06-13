@@ -52,6 +52,32 @@ function destroyChart(id) {
   if (_charts[id]) { _charts[id].destroy(); delete _charts[id]; }
 }
 
+// iOS (iPhone/iPad) detection — Safari there can't directly save downloads,
+// so we guide the user through the share sheet first.
+function isIOS() {
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS
+}
+
+// Run a JSON export. On iOS, show a short how-to-save dialog first because
+// the file opens in a previewer instead of saving automatically.
+function doExport(onDone) {
+  if (isIOS()) {
+    showConfirm({
+      title: 'バックアップを保存',
+      body: 'このあとファイルが開きます。右下の「共有」ボタン（□に↑）→「ファイルに保存」で保存してください。アプリ名で開く案内は無視してOKです。',
+      confirmLabel: '続ける',
+      danger: false,
+      onConfirm: () => { exportJSON(); onDone?.(); },
+    });
+  } else {
+    exportJSON();
+    showToast('エクスポートしました');
+    onDone?.();
+  }
+}
+
 function showConfirm({ title, body, confirmLabel, onConfirm, danger = true }) {
   const el = document.createElement('div');
   el.className = 'dialog-overlay';
@@ -265,11 +291,10 @@ function renderHome() {
         if (app) app.scrollTop = pendingScrollRestore;
         pendingScrollRestore = null;
       }
-      // Backup reminder banner
+      // Backup reminder banner — export records lastExportAt, hiding the
+      // banner for 30 days. On iOS a how-to-save dialog appears first.
       document.getElementById('backup-banner-export')?.addEventListener('click', () => {
-        exportJSON(); // records lastExportAt → banner won't show again for 30 days
-        showToast('バックアップを保存しました');
-        go('#/');
+        doExport(() => go('#/'));
       });
       document.getElementById('backup-banner-close')?.addEventListener('click', () => {
         updateSettings({ backupBannerDismissedAt: new Date().toISOString() });
@@ -1161,8 +1186,7 @@ function renderSettings() {
       });
       // Export
       document.getElementById('btn-export').addEventListener('click', () => {
-        exportJSON();
-        showToast('エクスポートしました');
+        doExport();
       });
       // Import
       document.getElementById('btn-import').addEventListener('click', () => {
