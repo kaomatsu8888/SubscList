@@ -26,6 +26,8 @@ let analyticsState = { period: 6 };
 let diagState = { phase: 'start', index: 0, answers: [], saved: false };
 // Holds prefilled values for a "duplicate" — consumed once by the next new-sub form
 let pendingDuplicate = null;
+// Scroll position to restore after an in-place re-render (e.g. custom reorder)
+let pendingScrollRestore = null;
 let _charts = {};
 
 // ── Helpers ──
@@ -219,6 +221,12 @@ function renderHome() {
   return {
     html,
     afterRender() {
+      // Restore scroll after an in-place re-render (e.g. custom reorder)
+      if (pendingScrollRestore != null) {
+        const app = document.getElementById('app');
+        if (app) app.scrollTop = pendingScrollRestore;
+        pendingScrollRestore = null;
+      }
       // Segment
       document.getElementById('seg-ctrl').addEventListener('click', e => {
         const btn = e.target.closest('[data-seg]');
@@ -257,6 +265,8 @@ function renderHome() {
           const tmp = subs[idx].sortOrder;
           updateSubscription(subs[idx].id, { sortOrder: subs[swapIdx].sortOrder });
           updateSubscription(subs[swapIdx].id, { sortOrder: tmp });
+          // Preserve scroll position so the list doesn't jump to the top
+          pendingScrollRestore = document.getElementById('app')?.scrollTop ?? 0;
           go('#/');
         });
       });
