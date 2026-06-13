@@ -412,6 +412,43 @@ ul, ol { list-style: none; }
 .sub-item:active { opacity: 0.7; }
 .sub-item:last-child { border-bottom: none; }
 
+/* ── Reorder (custom sort drag & drop) ── */
+.reorder-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.reorder-hint { font-size: 12px; }
+.reorder-toggle { width: auto; flex-shrink: 0; padding: 6px 14px; }
+
+#sub-list.is-reordering .sub-item { cursor: default; }
+#sub-list.is-reordering .sub-item:active { opacity: 1; }
+.sub-item.reorder {
+  background: var(--bg);
+  border-radius: 12px;
+  border-bottom: 1px solid var(--border);
+  padding: 12px 8px;
+  margin-bottom: 2px;
+}
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-width: 28px;
+  color: var(--text-sub);
+  cursor: grab;
+  touch-action: none;
+}
+.drag-handle:active { cursor: grabbing; }
+.sub-item.dragging {
+  background: var(--card);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  opacity: 0.95;
+  border-bottom-color: transparent;
+}
+
 .sub-icon {
   width: 44px;
   height: 44px;

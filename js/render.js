@@ -20,7 +20,7 @@ import { runDiagnosis } from './diagnosis.js';
 import { findCancelGuide } from './cancelGuides.js';
 
 // ── Module-level view state ──
-let homeState = { segment: 'all', sort: 'billing' };
+let homeState = { segment: 'all', sort: 'billing', reorderMode: false };
 let calState  = { year: new Date().getFullYear(), month: new Date().getMonth() + 1 };
 let analyticsState = { period: 6 };
 let diagState = { phase: 'start', index: 0, answers: [], saved: false };
@@ -94,7 +94,9 @@ export function renderRoute(hash, match) {
 // ═══════════════════════════════════════════════════════════
 // HOME
 // ═══════════════════════════════════════════════════════════
-function renderSubItem(sub, rates, defaultCurrency, showProgress, showConversion, categories) {
+const DRAG_HANDLE_SVG = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/></svg>`;
+
+function renderSubItem(sub, rates, defaultCurrency, showProgress, showConversion, categories, reorder = false) {
   const days    = daysUntilNext(sub);
   const prog    = getBillingProgress(sub);
   const monthly = monthlyEquiv(sub, rates, defaultCurrency);
@@ -110,7 +112,8 @@ function renderSubItem(sub, rates, defaultCurrency, showProgress, showConversion
     ? `<div class="sub-monthly">≈ ${fmtMonthly(monthly, defaultCurrency)}/月</div>` : '';
 
   return `
-    <div class="sub-item" data-sub-id="${sub.id}">
+    <div class="sub-item${reorder ? ' reorder' : ''}" data-sub-id="${sub.id}">
+      ${reorder ? `<div class="drag-handle" data-drag-handle>${DRAG_HANDLE_SVG}</div>` : ''}
       <div class="sub-icon" style="background:${sub.color ? sub.color + '22' : 'var(--card)'}">${escHtml(sub.icon) || '📦'}</div>
       <div class="sub-body">
         <div class="sub-name">${escHtml(sub.name)}</div>
@@ -173,13 +176,20 @@ function renderHome() {
   const chip = (key, label) =>
     `<button class="chip ${homeState.sort === key ? 'active' : ''}" data-sort="${key}">${escHtml(label)}</button>`;
 
+  const reorder = homeState.sort === 'custom' && homeState.reorderMode;
   const listHtml = sorted.length === 0
     ? `<div class="empty-state"><div class="empty-icon">📦</div><p class="empty-title">サブスクがありません</p><p class="empty-desc">「＋」ボタンから追加してください</p></div>`
-    : sorted.map(s => renderSubItem(s, rates, defaultCurrency, showBillingProgress, showMonthlyConversion, categories)
-        + (homeState.sort === 'custom' ? `<div class="custom-sort-btns" data-sid="${s.id}" style="display:flex;gap:4px;padding:2px 0 8px 56px">
-            <button class="btn btn-secondary btn-sm" data-move="up" style="width:36px;padding:4px">↑</button>
-            <button class="btn btn-secondary btn-sm" data-move="down" style="width:36px;padding:4px">↓</button>
-          </div>` : '')).join('');
+    : sorted.map(s => renderSubItem(s, rates, defaultCurrency, showBillingProgress, showMonthlyConversion, categories, reorder)).join('');
+
+  // Reorder bar — only shown for the custom sort
+  const reorderBarHtml = homeState.sort === 'custom' && sorted.length > 1 ? `
+    <div class="reorder-bar mt-12">
+      ${reorder
+        ? `<span class="reorder-hint">≡ をドラッグして並び替え</span>
+           <button class="btn btn-primary btn-sm reorder-toggle" id="reorder-toggle">完了</button>`
+        : `<span class="reorder-hint text-sub">並び順を自由に変更できます</span>
+           <button class="btn btn-secondary btn-sm reorder-toggle" id="reorder-toggle">並び替え</button>`}
+    </div>` : '';
 
   const html = `
     <div class="page">
@@ -215,7 +225,9 @@ function renderHome() {
         ${chip('custom', 'カスタム')}
       </div>
 
-      <div class="mt-12" id="sub-list">${listHtml}</div>
+      ${reorderBarHtml}
+
+      <div class="mt-12 ${reorder ? 'is-reordering' : ''}" id="sub-list">${listHtml}</div>
     </div>`;
 
   return {
@@ -239,37 +251,27 @@ function renderHome() {
         const btn = e.target.closest('[data-sort]');
         if (!btn) return;
         homeState.sort = btn.dataset.sort;
+        // Leaving custom always exits reorder mode
+        if (homeState.sort !== 'custom') homeState.reorderMode = false;
         go('#/');
       });
-      // Sub item click
+      // Sub item click — navigate to detail (disabled while reordering)
       document.getElementById('sub-list').addEventListener('click', e => {
+        if (homeState.reorderMode && homeState.sort === 'custom') return;
         const item = e.target.closest('[data-sub-id]');
         if (!item) return;
-        // Don't navigate if custom sort button was clicked
-        if (e.target.closest('.custom-sort-btns')) return;
         location.hash = `#/sub/${item.dataset.subId}`;
       });
-      // Custom sort buttons
-      document.querySelectorAll('.custom-sort-btns').forEach(wrap => {
-        wrap.addEventListener('click', e => {
-          const btn = e.target.closest('[data-move]');
-          if (!btn) return;
-          const dir = btn.dataset.move;
-          const sid = wrap.dataset.sid;
-          const state = getState();
-          const subs = state.subscriptions.filter(s => s.status === 'active')
-            .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-          const idx = subs.findIndex(s => s.id === sid);
-          const swapIdx = dir === 'up' ? idx - 1 : idx + 1;
-          if (swapIdx < 0 || swapIdx >= subs.length) return;
-          const tmp = subs[idx].sortOrder;
-          updateSubscription(subs[idx].id, { sortOrder: subs[swapIdx].sortOrder });
-          updateSubscription(subs[swapIdx].id, { sortOrder: tmp });
-          // Preserve scroll position so the list doesn't jump to the top
-          pendingScrollRestore = document.getElementById('app')?.scrollTop ?? 0;
-          go('#/');
-        });
+      // Toggle reorder mode (custom sort only)
+      document.getElementById('reorder-toggle')?.addEventListener('click', () => {
+        homeState.reorderMode = !homeState.reorderMode;
+        pendingScrollRestore = document.getElementById('app')?.scrollTop ?? 0;
+        go('#/');
       });
+      // Drag & drop reordering (pointer events: mouse + touch)
+      if (homeState.sort === 'custom' && homeState.reorderMode) {
+        setupReorderDnd(document.getElementById('sub-list'));
+      }
       // Refresh rates (only present when there are foreign-currency subs)
       document.getElementById('refresh-rates')?.addEventListener('click', async () => {
         showToast('為替レートを取得中…');
@@ -284,6 +286,70 @@ function renderHome() {
       });
     },
   };
+}
+
+// Drag-and-drop reordering for the custom-sorted home list.
+// Uses Pointer Events so it works with both touch and mouse. Dragging a
+// row's handle moves it among siblings; on release we renumber sortOrder.
+function setupReorderDnd(listEl) {
+  if (!listEl) return;
+  const app = document.getElementById('app');
+
+  listEl.querySelectorAll('.sub-item.reorder').forEach(row => {
+    const handle = row.querySelector('[data-drag-handle]');
+    if (!handle) return;
+
+    handle.style.touchAction = 'none'; // prevent scroll-hijack while dragging
+    handle.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      const rows = () => [...listEl.querySelectorAll('.sub-item.reorder')];
+      row.classList.add('dragging');
+      let autoScroll = 0;
+
+      const onMove = ev => {
+        const y = ev.clientY;
+        // Reorder: find the sibling whose midpoint we've crossed
+        for (const other of rows()) {
+          if (other === row) continue;
+          const r = other.getBoundingClientRect();
+          const mid = r.top + r.height / 2;
+          if (y < mid && other.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING) {
+            listEl.insertBefore(row, other);
+            break;
+          }
+          if (y > mid && other.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_PRECEDING) {
+            listEl.insertBefore(row, other.nextSibling);
+            break;
+          }
+        }
+        // Edge auto-scroll when dragging near top/bottom of viewport
+        if (app) {
+          const vh = window.innerHeight;
+          if (y < 90) autoScroll = -8;
+          else if (y > vh - 120) autoScroll = 8;
+          else autoScroll = 0;
+        }
+      };
+
+      const tick = () => {
+        if (autoScroll && app) app.scrollTop += autoScroll;
+        if (row.classList.contains('dragging')) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+
+      const onUp = () => {
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        row.classList.remove('dragging');
+        // Persist the new order: renumber sortOrder by DOM position
+        const ids = rows().map(r => r.dataset.subId);
+        ids.forEach((id, i) => updateSubscription(id, { sortOrder: i }));
+      };
+
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    });
+  });
 }
 
 // ═══════════════════════════════════════════════════════════
