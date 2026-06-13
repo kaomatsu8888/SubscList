@@ -128,11 +128,26 @@ function renderSubItem(sub, rates, defaultCurrency, showProgress, showConversion
     </div>`;
 }
 
+// Show the backup reminder when: there is data, AND it's been 30+ days
+// since the last export (or never), AND the banner wasn't dismissed in the
+// last 7 days. Action-based so it stays out of the way once you back up.
+function shouldShowBackupBanner(subscriptions, settings) {
+  if (subscriptions.length === 0) return false;
+  const DAY = 86400000;
+  const now = Date.now();
+  const lastExport = settings.lastExportAt ? new Date(settings.lastExportAt).getTime() : 0;
+  if (now - lastExport < 30 * DAY) return false;
+  const dismissed = settings.backupBannerDismissedAt ? new Date(settings.backupBannerDismissedAt).getTime() : 0;
+  if (now - dismissed < 7 * DAY) return false;
+  return true;
+}
+
 function renderHome() {
   const state = getState();
   const { subscriptions, exchangeRates: rates, settings, categories } = state;
   const { defaultCurrency, showBillingProgress, showMonthlyConversion } = settings;
   const active = subscriptions.filter(s => s.status === 'active');
+  const showBackupBanner = shouldShowBackupBanner(subscriptions, settings);
 
   const allCnt  = active.length;
   const moCnt   = active.filter(s => s.billingCycle === 'monthly').length;
@@ -211,6 +226,17 @@ function renderHome() {
         </div>
       </div>
 
+      ${showBackupBanner ? `
+      <div class="backup-banner mt-12" id="backup-banner">
+        <span class="backup-banner-icon">💾</span>
+        <div class="backup-banner-body">
+          <div class="backup-banner-title">バックアップはお済みですか？</div>
+          <div class="backup-banner-desc">データは端末内のみ。月1回のエクスポートがおすすめです。</div>
+        </div>
+        <button class="btn btn-primary btn-sm backup-banner-btn" id="backup-banner-export">保存</button>
+        <button class="backup-banner-close" id="backup-banner-close" aria-label="閉じる">×</button>
+      </div>` : ''}
+
       <div class="segment mt-12" id="seg-ctrl">
         ${seg('all', 'すべて', allCnt)}
         ${seg('monthly', '月額', moCnt)}
@@ -239,6 +265,16 @@ function renderHome() {
         if (app) app.scrollTop = pendingScrollRestore;
         pendingScrollRestore = null;
       }
+      // Backup reminder banner
+      document.getElementById('backup-banner-export')?.addEventListener('click', () => {
+        exportJSON(); // records lastExportAt → banner won't show again for 30 days
+        showToast('バックアップを保存しました');
+        go('#/');
+      });
+      document.getElementById('backup-banner-close')?.addEventListener('click', () => {
+        updateSettings({ backupBannerDismissedAt: new Date().toISOString() });
+        document.getElementById('backup-banner')?.remove();
+      });
       // Segment
       document.getElementById('seg-ctrl').addEventListener('click', e => {
         const btn = e.target.closest('[data-seg]');

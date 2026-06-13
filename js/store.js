@@ -34,6 +34,8 @@ const DEFAULTS = {
     notifyTimingDays: [3, 0],
     notifyTime: '09:00',
     reConfirmDialogs: true,
+    lastExportAt: null,            // ISO date of last JSON export
+    backupBannerDismissedAt: null, // ISO date the backup banner was dismissed
   },
 };
 
@@ -225,6 +227,9 @@ export function clearData() {
 // ── JSON Export ──
 export function exportJSON() {
   const state = getState();
+  // Remember when the user last backed up (drives the reminder banner)
+  state.settings.lastExportAt = new Date().toISOString();
+  save();
   const json = JSON.stringify({ ...state, exportedAt: new Date().toISOString() }, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);

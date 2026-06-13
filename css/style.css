@@ -297,6 +297,32 @@ ul, ol { list-style: none; }
   padding: 20px;
   position: relative;
 }
+
+/* Backup reminder banner (shown when 30+ days since last export) */
+.backup-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm, 12px);
+  background: var(--card);
+  border: 1px solid var(--progress);
+}
+.backup-banner-icon { font-size: 22px; line-height: 1; flex-shrink: 0; }
+.backup-banner-body { flex: 1; min-width: 0; }
+.backup-banner-title { font-size: 13px; font-weight: 700; }
+.backup-banner-desc { font-size: 11px; color: var(--text-sub); margin-top: 2px; line-height: 1.4; }
+.backup-banner-btn { width: auto; flex-shrink: 0; padding: 6px 14px; }
+.backup-banner-close {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-sub);
+  background: transparent;
+  cursor: pointer;
+}
 .hero-label {
   font-size: 13px;
   opacity: 0.65;
